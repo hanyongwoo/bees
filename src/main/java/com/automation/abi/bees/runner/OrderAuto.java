@@ -125,6 +125,7 @@ public class OrderAuto {
             date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX",Locale.KOREA).parse(pDate);
             SimpleDateFormat newDtFormat = new SimpleDateFormat("yyyy-MM-dd");
             String parse = newDtFormat.format(date);
+        
 
             return parse;
         } catch (java.text.ParseException e) {

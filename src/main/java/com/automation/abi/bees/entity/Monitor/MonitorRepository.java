@@ -1,7 +1,6 @@
 package com.automation.abi.bees.entity.Monitor;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.List;
 
 import org.springframework.data.repository.CrudRepository;
