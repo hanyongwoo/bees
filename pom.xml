@@ -112,6 +112,10 @@
 			<artifactId>poi-scratchpad</artifactId>
 			<version>3.9</version>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-dbcp2</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

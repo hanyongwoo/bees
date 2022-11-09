@@ -307,7 +307,7 @@ public class BeesService {
 		Set<String> aKeys = before.keySet();
 		Set<String> bKeys = after.keySet();
 
-		System.out.println(aKeys.size() + " , " + bKeys.size());
+		//System.out.println(aKeys.size() + " , " + bKeys.size());
 
 		JSONObject resultobj = new JSONObject();
 		
