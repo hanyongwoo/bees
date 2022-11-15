@@ -4,6 +4,7 @@ public enum InterfaceId {
 
     INVOICE_POST("INVOICE_KBON_0001"),
     ITEM_POST("ITEM_KBON_0001"),
+    PRICE_POST("PRICE_KBON_0001"),
     ACCOUNT_POST("ACCOUNT_KBON_0001");
 
     private final String value;

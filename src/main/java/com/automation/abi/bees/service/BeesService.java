@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -35,6 +37,7 @@ import org.springframework.stereotype.Service;
 import com.automation.abi.bees.conf.ConfigUtil;
 import com.automation.abi.bees.entity.Monitor.Monitor;
 import com.automation.abi.bees.entity.Monitor.MonitorRepository;
+import com.automation.abi.bees.util.OrderInvoice;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -65,7 +68,8 @@ public class BeesService {
 		// String result = "";
 		JSONArray resultArray = new JSONArray();
 
-		List<Monitor> a = invoiceExtracted(startDate, endDate, ws_id);
+		String if_id = InterfaceId.INVOICE_POST.getValue();
+		List<Monitor> a = invoiceAndPriceExtracted(startDate, endDate, ws_id, if_id);
 
 		JSONParser parser = new JSONParser();
 
@@ -103,9 +107,7 @@ public class BeesService {
 	 * @param ws_id
 	 * @return
 	 */
-	private List<Monitor> invoiceExtracted(String startDate, String endDate, String ws_id) {
-
-		String if_id = InterfaceId.INVOICE_POST.getValue();
+	private List<Monitor> invoiceAndPriceExtracted(String startDate, String endDate, String ws_id, String if_id) {
 
 		int sy = Integer.parseInt(startDate.substring(0, 4));
 		int sm = Integer.parseInt(startDate.substring(4, 6));
@@ -118,7 +120,7 @@ public class BeesService {
 		LocalDateTime startDatetime = LocalDateTime.of(LocalDate.of(sy, sm, sd), LocalTime.of(0, 0, 0));
 		LocalDateTime endDatetime = LocalDateTime.of(LocalDate.of(ey, em, ed), LocalTime.of(23, 59, 59));
 
-		List<Monitor> a = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(startDatetime, endDatetime, if_id,ws_id);
+		List<Monitor> a = monitorRepository.findListByWs(startDatetime, endDatetime, if_id,ws_id);
 
 		return a;
 	};
@@ -139,7 +141,7 @@ public class BeesService {
 		LocalDateTime startDatetime = LocalDateTime.of(LocalDate.now(), LocalTime.of(0, 0, 0));
 		LocalDateTime endDatetime = LocalDateTime.of(LocalDate.now(), LocalTime.of(23, 59, 59));
 
-		List<Monitor> a = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(startDatetime, endDatetime, if_id, ws_id);
+		List<Monitor> a = monitorRepository.findListByWs(startDatetime, endDatetime, if_id, ws_id);
 
 		return a;
 	};
@@ -155,9 +157,10 @@ public class BeesService {
 	 * @throws ParseException
 	 * @description Item SKU 코드 전날 비교 추출
 	 */
-	public JSONArray itemDiff(String date, String wsId) throws ParseException {
+	public Map itemDiff(String date, String wsId) throws ParseException {
 		
-		JSONArray resultArray = new JSONArray();
+		//JSONArray resultArray = new JSONArray();
+		Map resultobj = new TreeMap();
 
 		int sy = Integer.parseInt(date.substring(0, 4));
 		int sm = Integer.parseInt(date.substring(4, 6));
@@ -166,23 +169,25 @@ public class BeesService {
 		LocalDateTime startDatetime = LocalDateTime.of(LocalDate.of(sy, sm, sd).minusDays(1), LocalTime.of(0, 0, 0));
 		LocalDateTime endDatetime = LocalDateTime.of(LocalDate.of(sy, sm, sd), LocalTime.of(0, 0, 0));
 		
-		itemDiffExtracted(resultArray, startDatetime, endDatetime, wsId);
-		accountDiffExtracted(resultArray, startDatetime, endDatetime, wsId);
+		itemDiffExtracted(resultobj, startDatetime, endDatetime, wsId);
+		accountDiffExtracted(resultobj, startDatetime, endDatetime, wsId);
 		
+		SortedMap map = (SortedMap)resultobj;
 
-		return resultArray;
+		return resultobj;
 	}
 
 	// Account 전날 비교
-	private void accountDiffExtracted(JSONArray resultArray, LocalDateTime startDatetime, LocalDateTime endDatetime, String wsId) throws ParseException {
+	private void accountDiffExtracted(Map resultobj, LocalDateTime startDatetime, LocalDateTime endDatetime, String wsId) throws ParseException {
 		// 데이터 조회
 		Map<String,List> before = new HashMap<>();
 		Map<String,List> after = new HashMap<>();
+		String addAndRemoveItemList = "";
 
 		String if_id = InterfaceId.ACCOUNT_POST.getValue();
 
-		List<Monitor> a = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(startDatetime, startDatetime, if_id,wsId);
-		List<Monitor> b = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(endDatetime, endDatetime, if_id,wsId);
+		List<Monitor> a = monitorRepository.findListByWs(startDatetime, startDatetime, if_id,wsId);
+		List<Monitor> b = monitorRepository.findListByWs(endDatetime, endDatetime, if_id,wsId);
 
 		JSONParser parser = new JSONParser();
 
@@ -231,47 +236,40 @@ public class BeesService {
 
 		System.out.println(aKeys.size() + " , " + bKeys.size());
 
-		JSONObject resultobj = new JSONObject();
-		resultobj.put("beforeAccount", aKeys.size());
-		resultobj.put("afterAccount", bKeys.size());
-
-		//resultArray += "beforeAccount : " + aKeys.size() + " , afterAccount : " +  bKeys.size() + "<br/>";
-		resultArray.add(resultobj);
-
+		resultobj.put("ACCOUNT_TOTAL_BEFORE", aKeys.size());
+		resultobj.put("ACCOUNT_TOTAL_AFTER", bKeys.size());
 
 		// 추가된 account 찾기
 		for(String key : bKeys) {
 			if(before.get(key) == null){
-				resultobj = new JSONObject();
-				resultobj.put("+account", key);
-				resultobj.put("name", after.get(key));
-				//resultArray += "+account : " + key + "(" + after.get(key) + ")<br/>" ;
-				resultArray.add(resultobj);
+				addAndRemoveItemList += key + "(" + before.get(key) + "),";
 			}
 		}
+		resultobj.put("ACCOUNT+", addAndRemoveItemList);
+		addAndRemoveItemList = "";
 
 		// 삭제된 account 찾기
 		for(String key : aKeys) {
 			if(after.get(key) == null){
-				resultobj = new JSONObject();
-				resultobj.put("-account", key);
-				resultobj.put("name", before.get(key));
-				//resultArray += "-sku : " + key + "(" + before.get(key) + ")<br/>" ;
-				resultArray.add(resultobj);
+				addAndRemoveItemList += key + "(" + after.get(key) + "),";
 			}
 		}
+
+		resultobj.put("ACCOUNT-", addAndRemoveItemList);
+		
 	}
 
 	// Item 전날 비교
-	private void itemDiffExtracted(JSONArray resultArray, LocalDateTime startDatetime, LocalDateTime endDatetime, String wsId) throws ParseException {
+	private void itemDiffExtracted(Map resultobj, LocalDateTime startDatetime, LocalDateTime endDatetime, String wsId) throws ParseException {
 		// 데이터 조회
 		Map before = new HashMap<>();
 		Map after = new HashMap<>();
+		Map priceMap = new HashMap<>();
 
 		String if_id = InterfaceId.ITEM_POST.getValue();
 
-		List<Monitor> a = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(startDatetime, startDatetime, if_id,wsId);
-		List<Monitor> b = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(endDatetime, endDatetime, if_id,wsId);
+		List<Monitor> a = monitorRepository.findListByWs(startDatetime, startDatetime, if_id,wsId);
+		List<Monitor> b = monitorRepository.findListByWs(endDatetime, endDatetime, if_id,wsId);
 
 		JSONParser parser = new JSONParser();
 		
@@ -303,45 +301,81 @@ public class BeesService {
 				after.put(obj.get("sku"), obj.get("name"));
 			}
 		}
+		
 
 		Set<String> aKeys = before.keySet();
 		Set<String> bKeys = after.keySet();
 
-		//System.out.println(aKeys.size() + " , " + bKeys.size());
+		resultobj.put("SKU_TOTAL_BEFORE", aKeys.size());
+		resultobj.put("SKU_TOTAL_AFTER", bKeys.size());
 
-		JSONObject resultobj = new JSONObject();
-		
-		resultobj.put("beforeSKU", aKeys.size());
-		resultobj.put("afterSKU", bKeys.size());
-
-		//resultArray += "beforeSKU : " + aKeys.size() + " , afterSKU : " +  bKeys.size() + "<br/>";
-
-		resultArray.add(resultobj);
-
+		String addAndRemoveItemList = "";
 
 		// 추가된 sku 찾기
 		for(String key : bKeys) {
 			if(before.get(key) == null){
-				resultobj = new JSONObject();
-				resultobj.put("+sku", key);
-				resultobj.put("name", after.get(key));
-				//resultArray += "+sku : " + key + "(" + after.get(key) + ")<br/>" ;
-				resultArray.add(resultobj);
-				
+				addAndRemoveItemList += key + "(" + after.get(key) + "),";
 			}
 		}
+		resultobj.put("SKU+", addAndRemoveItemList);
+		addAndRemoveItemList = "";
 
 		// 삭제된 sku 찾기
 		for(String key : aKeys) {
 			if(after.get(key) == null){
-				resultobj = new JSONObject();
-				resultobj.put("-sku", key);
-				resultobj.put("name", before.get(key));
-				//resultArray += "-sku : " + key + "(" + before.get(key) + ")<br/>" ;
-				resultArray.add(resultobj);
+				addAndRemoveItemList += key + "(" + before.get(key) + "),";
 			}
 		}
+		resultobj.put("SKU-", addAndRemoveItemList);
+
+
+		// Price 리스트 조회 (endtime 기준)
+		if_id = InterfaceId.PRICE_POST.getValue();
+		List<Monitor> c = monitorRepository.findListByWs(endDatetime, endDatetime, if_id,wsId);
+
+		if(c.size() < 1) return;
+
+		Object object = parser.parse(c.get(0).getDebugData());
+
+		JSONObject jsonObject = (JSONObject) object;
+
+		String jsonArrayString = jsonObject.get("payload").toString();
+		JSONObject prices = (JSONObject) parser.parse(jsonArrayString);
+
+		JSONArray priceArray = (JSONArray)prices.get("prices");
+
+		for(int j = 0 ; j < priceArray.size() ; j++) {
+			JSONObject obj = (JSONObject) priceArray.get(j);
+			priceMap.put(obj.get("sku"), obj.get("vendorItemId"));
+		}
+			
+		Set<String> cKeys = priceMap.keySet();
+
+		resultobj.put("PRICE_SKU_TOTAL", cKeys.size());
+
+		addAndRemoveItemList = "";
+
+		// 추가된 sku 찾기
+		for(String key : bKeys) {
+			if(priceMap.get(key) == null){
+				addAndRemoveItemList += key + "(" + after.get(key) + "),";
+			}
+		}
+		resultobj.put("PRICE SKU+", addAndRemoveItemList);
+		addAndRemoveItemList = "";
+
+		// 삭제된 sku 찾기
+		for(String key : cKeys) {
+			if(after.get(key) == null){
+				addAndRemoveItemList += key + "(" + priceMap.get(key) + "),";
+			}
+		}
+		resultobj.put("PRICE SKU-", addAndRemoveItemList);
 	};
+
+
+	// Price ITEM | ITEM 마스터 정보 비교
+
 
 	/**
 	 * 
@@ -351,15 +385,17 @@ public class BeesService {
 	 * @throws ParseException
 	 * @description : 주문정보 조회
 	 */
-	public JSONArray getOrderInfoArrangement(String startDate, String endDate, String wsId) throws ParseException {
-		JSONArray resultArray = new JSONArray();
+	public List<OrderInvoice> getOrderInfoArrangement(String startDate, String endDate, String wsId) throws ParseException {
+		//JSONArray resultArray = new JSONArray();
+		List<OrderInvoice> orderInvoices = new ArrayList<>();
 		Map invoiceMap = new HashMap<>();
 		Map accountMap = new HashMap<>();
 		
 		String ws_id = wsId; //configUtil.getProperty("UAT.WS_ID");
 
 		// invoice 리스트 조회
-		List<Monitor> a = invoiceExtracted(startDate, endDate, ws_id);
+		String if_id = InterfaceId.INVOICE_POST.getValue();
+		List<Monitor> a = invoiceAndPriceExtracted(startDate, endDate, ws_id, if_id);
 		JSONParser parser = new JSONParser();
 
 		for (int i = 0; i < a.size(); i++) {
@@ -453,30 +489,50 @@ public class BeesService {
 						JSONObject delivery = (JSONObject) tempObject.get("delivery");
 						System.out.println(parsingDate + " | " + tempObject.get("orderNumber") + " | " + vendor.get("accountId"));
 
-						JSONObject resultobj = new JSONObject();
-						resultobj.put("date", parsingDate);
-						resultobj.put("orderNumber", tempObject.get("orderNumber"));
-						resultobj.put("status", tempObject.get("status"));
-						resultobj.put("accountId", vendor.get("accountId"));
-						resultobj.put("deliveryDate", delivery.get("date"));
-						resultobj.put("note", tempObject.get("note"));
+						//JSONObject resultobj = new JSONObject();
+						OrderInvoice orderInvoice = new OrderInvoice();
+
+						orderInvoice.setAccountId((String)vendor.get("accountId"));
+						orderInvoice.setDeliveryDate((String)delivery.get("date"));
+						orderInvoice.setNote((String)tempObject.get("note"));
+						orderInvoice.setOrderNumber((String)tempObject.get("orderNumber"));
+						orderInvoice.setStatus((String)tempObject.get("status"));
+						orderInvoice.setOrderDate(parsingDate);
+						orderInvoice.setActureInvoiceTnt((String.valueOf(invoiceMap.getOrDefault(tempObject.get("orderNumber"),"0"))));
+						orderInvoice.setCustomer((String)accountMap.get(vendor.getOrDefault("accountId","")));
+						// resultobj.put("date", parsingDate);
+						// resultobj.put("orderNumber", tempObject.get("orderNumber"));
+						// resultobj.put("status", tempObject.get("status"));
+						// resultobj.put("accountId", vendor.get("accountId"));
+						// resultobj.put("deliveryDate", delivery.get("date"));
+						// resultobj.put("note", tempObject.get("note"));
+
+
 
 						// Invoice 정보
 						if (invoiceMap.get(tempObject.get("orderNumber")) != null) {
-							resultobj.put("invoiceId", tempObject.get("orderNumber"));
-							resultobj.put("total", invoiceMap.get(tempObject.get("orderNumber")));
+							// resultobj.put("invoiceId", tempObject.get("orderNumber"));
+							// resultobj.put("total", invoiceMap.get(tempObject.get("orderNumber")));
+							
 						}
 
 						// Account 정보
 						if (accountMap.get(vendor.get("accountId")) != null) {
-							resultobj.put("accountId", vendor.get("accountId"));
-							resultobj.put("customer", accountMap.get(vendor.get("accountId")));
+							// resultobj.put("accountId", vendor.get("accountId"));
+							// resultobj.put("customer", accountMap.get(vendor.get("accountId")));
+							
+
 						}
 
-						resultArray.add(resultobj);
+						orderInvoices.add(orderInvoice);
+						//resultArray.add(resultobj);
 					}
 
-					excelDownload(resultArray, wsId);
+					//JSONObject resultobj = new JSONObject();
+
+					
+					return orderInvoices;
+					//return excelDownload(resultArray, wsId);
 				}
 				
 			}
@@ -487,7 +543,7 @@ public class BeesService {
 			e.printStackTrace();
 		}
 
-		return resultArray;
+		return null;
 	}
 
 
@@ -557,7 +613,7 @@ public class BeesService {
 	/*
 	 * 엑셀 생성
 	 */
-	public void excelDownload(JSONArray dataArray, String wsId) {
+	public XSSFWorkbook excelDownload(JSONArray dataArray, String wsId) {
 		
 		try (FileInputStream fis = new FileInputStream(configUtil.getProperty("EXCEL_PATH")+"template_invoice.xlsx")) {
 			XSSFWorkbook workbook = new XSSFWorkbook(fis);
@@ -608,12 +664,16 @@ public class BeesService {
 			FileOutputStream fos = new FileOutputStream(xlsFile);
 			workbook.write(fos);
 
-			if (fis != null) fis.close();
-			if (fos != null) fos.close();
+			//if (fis != null) fis.close();
+			//if (fos != null) fos.close();
+
+			return workbook;
+			
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		return null;
 		
 	}
 
@@ -668,6 +728,8 @@ public class BeesService {
 						resultAccounts += (String)obj.get("accountId") + " | " 
 							+ (String)obj.get("customerAccountId") + " | " 
 							+ (String)obj.get("displayName") + " | " 
+							+ (String)obj.get("deliveryCenterId") + " | " 
+							+ (String)obj.get("status") + " | " 
 							+ owner.getOrDefault("firstName","") + " | " 
 							+ owner.getOrDefault("phone","") + "<br/>";
 					} else {

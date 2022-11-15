@@ -7,7 +7,7 @@ import javax.persistence.Id;
 
 import lombok.Data;
 
-@Entity(name = "eai_trans_mon")
+@Entity(name = "eai_trans_log")
 @Data
 public class Monitor {
     
@@ -20,5 +20,6 @@ public class Monitor {
     private LocalDateTime procDate;
     private String dataCnt;
     private String debugData;
+    private String step;
     
 }

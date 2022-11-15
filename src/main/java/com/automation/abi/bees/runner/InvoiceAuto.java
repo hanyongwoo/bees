@@ -38,7 +38,7 @@ public class InvoiceAuto {
  			LocalDateTime endDatetime = LocalDateTime.of(LocalDate.now(), LocalTime.of(23,59,59));
 
 			System.out.println(startDatetime + " , " + endDatetime);
-			List<Monitor> a = monitorRepository.findByProcDateBetweenAndIfIdAndWsId(startDatetime, endDatetime, if_id, ws_id);
+			List<Monitor> a = monitorRepository.findListByWs(startDatetime, endDatetime, if_id, ws_id);
 
 			JSONParser parser = new JSONParser();
 
